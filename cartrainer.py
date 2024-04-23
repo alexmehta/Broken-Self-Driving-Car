@@ -9,7 +9,9 @@ import torchvision as tv
 
 import json
 
-#CNN
+# CNN
+
+
 class CNN(nn.Module):
     def __init__(self):
         super().__init__()
@@ -24,23 +26,12 @@ class CNN(nn.Module):
         self.conv3 = nn.Conv2d(16, 48, 5)
         self.relu3 = nn.ReLU()
         self.pool3 = nn.MaxPool2d(2, 2)
-
-        self.conv4 = nn.Conv2d(48, 72, 5)
-        self.relu4 = nn.ReLU()
-        self.pool4 = nn.MaxPool2d(2, 2)
-
-        self.conv5 = nn.Conv2d(72, 114, 5)
-        self.relu5 = nn.ReLU()
-        self.pool5 = nn.MaxPool2d(2, 2)
-
-        self.lin1 = nn.Linear(114 * 5 * 5, 1400)
+        self.lin1 = nn.Linear(48*1*2, 1400)
         self.linrelu1 = nn.ReLU()
 
         self.lin2 = nn.Linear(1400, 700)
-        self.linrelu2 = nn.ReLU()
 
         self.lin3 = nn.Linear(700, 350)
-        self.linrelu3 = nn.ReLU()
 
         self.lin4 = nn.Linear(350, 256)
 
@@ -57,30 +48,24 @@ class CNN(nn.Module):
         x = self.relu3(x)
         x = self.pool3(x)
 
-        x = self.conv4(x)
-        x = self.relu4(x)
-        x = self.pool4(x)
-
-        x = self.conv5(x)
-        x = self.relu5(x)
-        x = self.pool5(x)
-
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = torch.flatten(x, 1)  # flatten all dimensions except batch
 
         x = self.lin1(x)
-        x = self.linerelu1(x)
+        x = self.linrelu1(x)
 
         x = self.lin2(x)
-        x = self.linerelu2(x)
+        x = self.linrelu1(x)
 
         x = self.lin3(x)
-        x = self.linerelu(x)
+        x = self.linrelu1(x)
 
         x = self.lin4(x)
 
         return x
 
-#TCN
+# TCN
+
+
 class Chomp1d(nn.Module):
     def __init__(self, chomp_size):
         super(Chomp1d, self).__init__()
@@ -107,7 +92,8 @@ class TemporalBlock(nn.Module):
 
         self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
                                  self.conv2, self.chomp2, self.relu2, self.dropout2)
-        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.downsample = nn.Conv1d(
+            n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
         self.relu = nn.ReLU()
         self.init_weights()
 
@@ -140,16 +126,17 @@ class TemporalConvNet(nn.Module):
     def forward(self, x):
         return self.network(x)
 
-#data loader
+
+# data loader
 fp = open('data/clockwise.json')
 
 data = json.load(fp)
 
 frame_index_offset = data[0][3]
 
-#initialize images
+# initialize images
 images = np.zeros((len(data), 3, 37, 50))
-#speed is 0 and turn direction is 1
+# speed is 0 and turn direction is 1
 outputs = np.zeros((len(data), 2, 1))
 
 i = 0
@@ -164,58 +151,56 @@ for i in range(0, len(data)):
     data[i][3] -= frame_index_offset
     frame_index = data[i][3]
 
-    #red
+    # red
     while img_x in range(0, len(images[i][0])):
         while img_y in range(0, len(images[i][0][img_x])):
             images[i][0][img_x][img_y] = data[i][0][img_x][img_y][0]
             img_y = img_y + 1
 
-
         img_x = img_x + 1
 
     img_x = 0
     img_y = 0
 
-    #green
+    # green
     while img_x in range(0, len(images[i][0])):
         while img_y in range(0, len(images[i][0][img_x])):
             images[i][1][img_x][img_y] = data[i][0][img_x][img_y][1]
             img_y = img_y + 1
 
-
         img_x = img_x + 1
 
     img_x = 0
     img_y = 0
 
-    #blue
+    # blue
     while img_x in range(0, len(images[i][0])):
         while img_y in range(0, len(images[i][0][img_x])):
             images[i][2][img_x][img_y] = data[i][0][img_x][img_y][2]
             img_y = img_y + 1
 
-
         img_x = img_x + 1
 
-    #speed
+    # speed
     outputs[i][0] = data[i][1]
-    #turn direction
+    # turn direction
     outputs[i][1] = data[i][2]
 
-images = torch.tensor(images, dtype = torch.float32)
-outputs = torch.tensor(outputs, dtype = torch.float32)
+images = torch.tensor(images, dtype=torch.float32)
+outputs = torch.tensor(outputs, dtype=torch.float32)
 
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-#initialize the tcn
-n_channels = [1,2,3]
+# initialize the tcn
+n_channels = [1, 2, 2]
 k_size = 5
 n_inputs = 256
 
-tcn = TemporalConvNet(num_inputs = n_inputs, num_channels = n_channels, kernel_size = k_size)
+tcn = TemporalConvNet(num_inputs=n_inputs,
+                      num_channels=n_channels, kernel_size=k_size)
 cnn = CNN()
 
-#trainin
+# trainin
 batch_size = 40
 learning_rate = 0.001
 num_epochs = 20
@@ -226,9 +211,10 @@ loss_fn = nn.CrossEntropyLoss()
 for epoch in range(num_epochs):
     for i in range(0, len(images), batch_size):
         images_batch = images[i:i+batch_size]
-        output_prediction = tcn(cnn(images_batch))
-        output_batch = outputs[i:i+batch_size][0]
-
+        x1 = cnn(images_batch).unsqueeze(-1)
+        output_prediction = tcn(x1).squeeze(-1)
+        output_batch = outputs[i:i+batch_size].squeeze(-1)
+        print(output_prediction.shape, output_batch.shape)
         loss = loss_fn(output_prediction, output_batch)
         optimizer.zero_grad()
         loss.backward()
