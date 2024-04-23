@@ -5,8 +5,6 @@ from torch import flatten
 from torch.utils.data import Dataset
 import numpy as np
 import torch
-import torchvision as tv
-
 import json
 
 # CNN
@@ -189,32 +187,33 @@ for i in range(0, len(data)):
 images = torch.tensor(images, dtype=torch.float32)
 outputs = torch.tensor(outputs, dtype=torch.float32)
 
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print(device)
 
 # initialize the tcn
-n_channels = [1, 2, 2]
+n_channels = [1, 5, 2]
 k_size = 5
 n_inputs = 256
 
 tcn = TemporalConvNet(num_inputs=n_inputs,
-                      num_channels=n_channels, kernel_size=k_size)
-cnn = CNN()
+                      num_channels=n_channels, kernel_size=k_size).to(device)
+cnn = CNN().to(device)
 
 # trainin
-batch_size = 40
+batch_size = 60
 learning_rate = 0.001
-num_epochs = 20
+num_epochs = 2000
 
-optimizer = optim.Adam(tcn.parameters(), lr=learning_rate)
+optimizer = optim.Adam(nn.ModuleList(
+    [tcn, cnn]).parameters(), lr=learning_rate)
 loss_fn = nn.CrossEntropyLoss()
 
 for epoch in range(num_epochs):
     for i in range(0, len(images), batch_size):
-        images_batch = images[i:i+batch_size]
+        images_batch = images[i:i+batch_size].to(device)
         x1 = cnn(images_batch).unsqueeze(-1)
         output_prediction = tcn(x1).squeeze(-1)
-        output_batch = outputs[i:i+batch_size].squeeze(-1)
-        print(output_prediction.shape, output_batch.shape)
+        output_batch = outputs[i:i+batch_size].to(device).squeeze(-1)
         loss = loss_fn(output_prediction, output_batch)
         optimizer.zero_grad()
         loss.backward()
