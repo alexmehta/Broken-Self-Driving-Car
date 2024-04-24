@@ -191,7 +191,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 # initialize the tcn
-n_channels = [1, 5, 2]
+n_channels = [1, 10, 10,  2]
 k_size = 5
 n_inputs = 256
 
@@ -206,16 +206,17 @@ num_epochs = 2000
 
 optimizer = optim.Adam(nn.ModuleList(
     [tcn, cnn]).parameters(), lr=learning_rate)
-loss_fn = nn.CrossEntropyLoss()
+loss_fn = nn.MSELoss()
 
 for epoch in range(num_epochs):
     for i in range(0, len(images), batch_size):
+        optimizer.zero_grad()
         images_batch = images[i:i+batch_size].to(device)
         x1 = cnn(images_batch).unsqueeze(-1)
         output_prediction = tcn(x1).squeeze(-1)
         output_batch = outputs[i:i+batch_size].to(device).squeeze(-1)
         loss = loss_fn(output_prediction, output_batch)
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f'Finished epoch {epoch}, latest loss {loss}')
+
+    print(f'Finished epoch {epoch}, latest loss {loss}')
