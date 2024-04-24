@@ -93,6 +93,7 @@ class TemporalBlock(nn.Module):
         self.downsample = nn.Conv1d(
             n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
         self.relu = nn.ReLU()
+        self.batch_norm = nn.BatchNorm1d(n_outputs)
         self.init_weights()
 
     def init_weights(self):
@@ -103,6 +104,7 @@ class TemporalBlock(nn.Module):
 
     def forward(self, x):
         out = self.net(x)
+        out = self.batch_norm(out)
         res = x if self.downsample is None else self.downsample(x)
         return self.relu(out + res)
 
@@ -120,9 +122,10 @@ class TemporalConvNet(nn.Module):
                                      padding=(kernel_size-1) * dilation_size, dropout=dropout)]
 
         self.network = nn.Sequential(*layers)
+        self.tanh = nn.Tanh()
 
     def forward(self, x):
-        return self.network(x)
+        return self.tanh(self.network(x))
 
 
 # data loader
@@ -191,7 +194,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 
 # initialize the tcn
-n_channels = [1, 10, 10,  2]
+n_channels = [1, 30, 30, 2]
 k_size = 5
 n_inputs = 256
 
@@ -201,12 +204,14 @@ cnn = CNN().to(device)
 
 # trainin
 batch_size = 60
-learning_rate = 0.001
-num_epochs = 2000
+learning_rate = 0.01
+num_epochs = 50000
 
 optimizer = optim.Adam(nn.ModuleList(
     [tcn, cnn]).parameters(), lr=learning_rate)
-loss_fn = nn.MSELoss()
+loss_fn_1 = nn.MSELoss()
+alpha = 1
+loss_fn_2 = nn.CrossEntropyLoss()
 
 for epoch in range(num_epochs):
     for i in range(0, len(images), batch_size):
@@ -215,8 +220,10 @@ for epoch in range(num_epochs):
         x1 = cnn(images_batch).unsqueeze(-1)
         output_prediction = tcn(x1).squeeze(-1)
         output_batch = outputs[i:i+batch_size].to(device).squeeze(-1)
-        loss = loss_fn(output_prediction, output_batch)
+        loss = loss_fn_2(nn.functional.softmax(
+            output_prediction[:,  0]), output_batch[:, 0])
+        alpha*loss_fn_1(output_prediction[:,  1], output_batch[:, 1])
         loss.backward()
         optimizer.step()
 
-    print(f'Finished epoch {epoch}, latest loss {loss}')
+        print(f'Finished epoch {epoch}, latest loss {loss}')
